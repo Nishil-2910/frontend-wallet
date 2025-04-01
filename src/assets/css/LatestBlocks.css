@@ -1,0 +1,78 @@
+.bg-banner {
+    background-image: url('https://bscscan.com/images/svg/waves-light.svg');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    min-height: 400px;
+  }
+
+.btn-custom {
+    background-color: #ffc107;  
+    color: #000;               
+    font-weight: bold;
+    border-radius: 8px;         
+    padding: 10px 24px;         
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); 
+  }
+  .btn-custom:hover {
+    background-color: #e0a800;  
+    color: #000;
+  }
+
+  .custom-font-color {
+    color: #0784c3;
+  }
+
+  a:hover{
+    color: #0784c3e6;
+  }
+  
+  @media (max-width: 480px) {
+    .bg-banner {
+      min-height: 0px; /* Smaller height for mobile screens */
+    }
+  }
+  
+  @media (min-width: 481px) and (max-width: 768px) {
+    .bg-banner {
+      min-height: 250px; /* Smaller height for tablets */
+    }
+  }
+  
+  @media (min-width: 769px) and (max-width: 1200px) {
+    .bg-banner {
+      min-height: 250px; /* Medium screens */
+    }
+  }
+  
+  @media (min-width: 1201px) {
+    .bg-banner {
+      min-height: 350px; /* Larger height for bigger screens */
+    }
+  }
+
+  
+  @media (max-width: 480px) {
+    .btn-wrap {
+      height: 17vh; /* Smaller height for mobile screens */
+    }
+  }
+  
+  @media (min-width: 481px) and (max-width: 768px) {
+    .btn-wrap {
+      height: 28vh; /* Smaller height for tablets */
+    }
+  }
+  
+  @media (min-width: 769px) and (max-width: 1200px) {
+    .btn-wrap {
+      height: 29vh; /* Medium screens */
+    }
+  }
+  
+  @media (min-width: 1201px) {
+    .btn-wrap {
+      height: 40vh; /* Larger height for bigger screens */
+    }
+  }
+  

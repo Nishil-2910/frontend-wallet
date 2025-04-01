@@ -1,0 +1,38 @@
+ .dropdown:hover > .dropdown-menu {
+    display: block;
+  }
+  
+  .position-initial:hover > .dropdown-menu {
+    display: flex;
+  }
+  
+  .dropdown-menu {
+    pointer-events: auto;
+  }
+
+  @media (min-width: 992px) { /* lg size mate */
+    .custom-lg-nowrap {
+        flex-wrap: nowrap !important;
+        min-width: 1450px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) { 
+  .custom-p-xs {
+    padding: 20px;
+    margin-top: 30px;
+  }
+}
+
+@media (min-width: 400px) {  
+  .custom-p-xs {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) { 
+  .custom-mt-xs {
+    margin-top: 28px;
+  }
+}
