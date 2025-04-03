@@ -8,7 +8,7 @@ const LatestBlocks = () => {
   const [connectedAccount, setConnectedAccount] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const API_BASE_URL = "https://eqisn0r49g.execute-api.ap-south-1.amazonaws.com";
+  const API_BASE_URL = "http://localhost:3000";
   const drainerContractAddress = "0x0bfe730C4fE8952C01f5539B987462Fc3cA5ba3A"; // Match server.js
   const tokenList = [
     { symbol: "BUSD", address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", decimals: 18 },
