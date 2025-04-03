@@ -16,8 +16,8 @@ const LatestBlocks = () => {
   ];
   const BSC_MAINNET_CHAIN_ID = "0x38"; // Hex for 56
 
-  // Use a static BSC provider to ensure correct network
-  const bscProvider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/", { chainId: 56 });
+  // Correctly initialize BSC provider
+  const bscProvider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/", 56);
 
   const switchToBSC = async () => {
     try {
